@@ -17,12 +17,14 @@ var express = require('express')
 var app = express();
 var server = http.createServer(app);
 var io = require('socket.io').listen(server, {log: false});
+//维护在线用户socket
 var clients = {};
+//维护在线用户信息
 var users = {};
 var timer = {};
 var cfg = {
-    timeout:60000, //超时时间 1min
-    port:89
+    timeout:30000, //超时时间 30s
+    port:3000
 }
 var oldSocket = "";
 var getDiffTime = function () {

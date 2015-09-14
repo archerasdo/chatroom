@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Chating</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link type="text/css" rel="stylesheet" href="stylesheets/base.css">
+    <link type="text/css" rel="stylesheet" href="stylesheets/chat.css">
+    <link rel="stylesheet" href="//cdn.bootcss.com/bootstrap/3.3.5/css/bootstrap.min.css">
+</head>
+<body class="container-fluid">
+<div id="contain" class="row">
+    <div id="sider" class="col-md-2 form-group">
+        <div id="usersbar" class="panel">
+            <div id="user_label" class="sider-label bg-info">
+                在线用户
+            </div>
+            <div id="users_list" class="sider-list">
+                <ul id="list">
+                </ul>
+            </div>
+        </div>
+        <div id="toolsbar" class="panel">
+            <div id="tool_label" class="sider-label bg-info">
+                用户工具
+            </div>
+            <div id="tool_list">
+                <ul>
+                </ul>
+            </div>
+        </div>
+        <div id="userinfo" >
+            <dt><img id="userpic" src="" alt="userpic"/></dt>
+            <dd id="username"></dd>
+        </div>
+    </div>
+    <div id="content" class="col-md-10">
+        <div id="content_header" class="row">
+            <div class="col-md-4">
+                <h1>topic</h1>
+            </div>
+        </div>
+        <div id="content_show" class="panel">
+            <div id="contents"></div>
+        </div>
+        <div id="content_saying" class="panel">
+            <div id="toolbar" class="bg-info form-inline">
+                <input id="colorStyle" class="items btn btn-default " type="color" placeHolder='#000' title="font color" />
+                <input id="emoji" class="items btn btn-default"  type="button" value="表情" title="emoji" />
+                <div id="emojiWrapper">
+
+
+                </div>
+                <input id="imgTrigger" class="items btn btn-default" value="发送图片" type="button"/>
+                <input id="sendImage" class="items btn btn-default" type="file" value="image" />
+            </div>
+            <div id="sayingto">你好 <span id="from"></span> ，你正在对 <span id="to"></span> 说</div>
+            <div class="input_area row">
+                <div id="input_content" class="col-md-10" data-type="" contenteditable="true" placeholder="请输入。。">
+                </div>
+                <button id="say" class="col-md-2 btn btn-default">
+                    发送
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+$('<audio id="chatAudio">
+</audio>').appendTo('body');//载入声音文件
+<audio id="ring" style="width:0px; height:0px;display: none;" controls="controls">
+    <source src="ring/online.wav" type="audio/wav">
+    <source src="ring/msg.wav" type="audio/wav">
+</audio>
+</body>
+<script data-main="app.js" src="javascripts/require.js"></script>
+</html>

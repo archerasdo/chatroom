@@ -12,8 +12,9 @@ var express = require('express')
     , user = require('./routes/user')
     , http = require('http')
     , path = require('path')
-    , fs = require('fs');
-
+    , fs = require('fs')
+    , imgProcess = require('./util/imgConvert')
+    , db = require('./db/db');
 var app = express();
 var server = http.createServer(app);
 var io = require('socket.io').listen(server, {log: false});
@@ -23,19 +24,26 @@ var clients = {};
 var users = {};
 var timer = {};
 var cfg = {
-    timeout:30000, //超时时间 30s
-    port:3000
-}
+    timeout: 30000, //超时时间 30s
+    port: 3000,
+    SYSTEM_MSG_ONLINE: 'online',
+    SYSTEM_MSG_OFFLINE: 'offline',
+    SYSTEM_MSG_LOGIN: 'login',
+    SYSTEM_MSG_REFRESH: 'refresh',
+    SYSTEM_MSG_DISCONNECT: 'disconnect',
+    SYSTEM_MSG_RECONNECT: 'reconnect',
+    MSG_MIME_TYPE_TEXT: 'text',
+    MSG_MIME_TYPE_IMG: 'img',
+    MSG_MIME_TYPE_EMOJI: 'emoji'
+};
+
 var oldSocket = "";
-var getDiffTime = function () {
-    if (disconnect) {
-        return connect - disconnect;
-    }
-    return false;
-}
+
+
 
 //套接字事件
 io.sockets.on('connection', function (socket) {
+    //系统通信监听
     socket.on('online', function (data) {
         var data = JSON.parse(data);
 
@@ -44,7 +52,9 @@ io.sockets.on('connection', function (socket) {
             clearTimeout(timer[data.user.name]);
             delete timer[data.user.name];
         }
+        var emojiNum = fs.readdirSync('public/emoji').length;
         //检查是否是已经登录绑定
+
         if (!clients[data.user.name]) {
             //为新用户随机分配头像
             var fileNum = fs.readdirSync('public/images/head').length;
@@ -54,57 +64,31 @@ io.sockets.on('connection', function (socket) {
 
             //新上线用户，需要发送用户上线提醒,需要向客户端发送新的用户列表
             users[data.user.name] = data.user;
-            for (var index in clients) {
-                clients[index].emit('system', JSON.stringify({
-                    type: 'online',
-                    msg: data.user.name,
-                    time: (new Date()).getTime()
-                }));
-                clients[index].emit('userflush', JSON.stringify({users: users}));
-            }
-            console.log(data.user);
-            socket.emit('system', JSON.stringify({type: 'in', msg: data.user, time: (new Date()).getTime()}));
-            socket.emit('userflush', JSON.stringify({users: users}));
             clients[data.user.name] = socket;
+            for (var index in clients) {
+
+                clients[index].emit('userflush', JSON.stringify({users: users, time: (new Date()).getTime()}));
+            }
+
+            //初始化用户信息
+            socket.emit('initUser', {emojiNum: emojiNum, time: (new Date()).getTime(), userInfo: data.user});
         } else {
             clients[data.user.name] = socket;
-            clients[data.user.name].emit('system', JSON.stringify({
-                type: 'refresh',
-                msg: users[data.user.name],
-                time: (new Date()).getTime()
-            }));
-            clients[data.user.name].emit('userflush', JSON.stringify({users: users}));
-        }
-    });
-    socket.on('say', function (data) {
-        //dataformat:{to:'all',from:'Nick',msg:'msg'}
-        data = JSON.parse(data);
-        console.log(data);
-        console.log(users);
-        var msgData = {
-            time: (new Date()).getTime(),
-            data: data,
-            pic: users[data.from].pic
-        };
-        if (data.to == "all") {
-            //对所有人说
-            for (var index in clients) {
-                clients[index].emit('say', msgData);
-            }
-        }
-        else {
-            //对某人说
-            clients[data.to].emit('say', msgData);
-            clients[data.from].emit('say', msgData);
+
+            clients[data.user.name].emit('userflush', JSON.stringify({users: users, time: (new Date()).getTime()}));
+            //初始化用户信息
+            clients[data.user.name].emit('initUser', {
+                emojiNum: emojiNum,
+                time: (new Date()).getTime(),
+                userInfo: data.user
+            });
         }
     });
     socket.on('offline', function (user) {
-        console.log('disconnect');
         socket.disconnect();
     });
     socket.on('disconnect', function () {
         //有人下线
-        console.log('disconnect');
         for (var index in clients) {
             if (clients[index] == socket) {
                 timer[index] = setTimeout(userOffline, cfg.timeout);
@@ -112,34 +96,58 @@ io.sockets.on('connection', function (socket) {
                     delete users[index];
                     delete clients[index];
                     for (var index_inline in clients) {
-                        clients[index_inline].emit('system', JSON.stringify({
-                            type: 'offline',
-                            msg: index,
+                        //clients[index_inline].emit('system', JSON.stringify({
+                        //    type: 'offline',
+                        //    msg: index,
+                        //    time: (new Date()).getTime()
+                        //}));
+                        clients[index_inline].emit('userflush', JSON.stringify({
+                            users: users,
                             time: (new Date()).getTime()
                         }));
-                        clients[index_inline].emit('userflush', JSON.stringify({users: users}));
                     }
                 }
+
                 break;
             }
         }
     });
-    socket.on('img', function (data) {
+
+    //业务监听
+    socket.on('say', function (data) {
+        //textformat:{to:'all',from:'Nick',msg:'xxx',type:'text',fontColor:'#xxx'}
+        //imgformat:{to:'all',from:'Nick',picSrc:'xxx',type:'img'}
+        //emojiformat:{to:'all',from:'Nick',emojiSrc:'xx',type:'emoji'}
         data = JSON.parse(data);
-        var imgData = {
-            time: (new Date()).getTime(),
-            data: data
+        //var msgData = {};
+        //clients[data.from].emit('recvBeat');
+        //对不同媒体进行服务器端处理
+        switch (data.type) {
+            case cfg.MSG_MIME_TYPE_TEXT:
+                break;
+            case cfg.MSG_MIME_TYPE_IMG:
+                data.previewSrc = imgProcess.save_img(data.picSrc);
+                data.picSrc = imgProcess.get_reduced_dataurl(data.picSrc);
+                break;
+            case  cfg.MSG_MIME_TYPE_EMOJI:
+                break;
+            default :
+                break;
         }
+
         if (data.to == "all") {
             //对所有人说
             for (var index in clients) {
-                clients[index].emit('img', imgData);
+                if (index === data.from && data.type !== cfg.MSG_MIME_TYPE_IMG) {
+                    continue;
+                }
+                clients[index].emit('say', data);
             }
         }
         else {
             //对某人说
-            clients[data.to].emit('say', imgData);
-            clients[data.from].emit('say', imgData);
+            clients[data.to].emit('say', data);
+            clients[data.from].emit('say', data);
         }
     });
 });
@@ -183,6 +191,9 @@ app.get('/', function (req, res, next) {
 
 app.get('/signin', function (req, res, next) {
     res.sendfile('views/signin.html');
+});
+app.get('/videotest', function (req, res, next) {
+    res.sendfile('views/videotest.html');
 });
 app.post('/signin', function (req, res, next) {
     res.cookie("user", req.body.username);

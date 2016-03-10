@@ -1,14 +1,14 @@
 <!doctype html>
-<html>
+<html ng-app="chat">
 <head>
     <meta charset="utf-8">
     <title>Chating</title>
     <script src="/socket.io/socket.io.js"></script>
     <link type="text/css" rel="stylesheet" href="stylesheets/base.css">
     <link type="text/css" rel="stylesheet" href="stylesheets/chat.css">
-    <link rel="stylesheet" href="//cdn.bootcss.com/bootstrap/3.3.5/css/bootstrap.min.css">
+    <link rel="stylesheet" href="stylesheets/bootstrap.min.css">
 </head>
-<body class="container-fluid">
+<body class="container-fluid" ng-controller="system" ng-click="panelClose($event)">
 <div id="contain" class="row">
     <div id="sider" class="col-md-2 form-group">
         <div id="usersbar" class="panel">
@@ -16,7 +16,9 @@
                 在线用户
             </div>
             <div id="users_list" class="sider-list">
-                <ul id="list">
+                <ul id="list" ng-repeat="user in users" ng-click="getMsgReciver($event)">
+                    <li title="双击聊天" alt="all" onselectstart="return false">所有人</li>
+                    <li alt="user.name" title="双击聊天" onselectstart="return false" ng-bind="user.name"></li>
                 </ul>
             </div>
         </div>
@@ -29,48 +31,115 @@
                 </ul>
             </div>
         </div>
-        <div id="userinfo" >
-            <dt><img id="userpic" src="" alt="userpic"/></dt>
-            <dd id="username"></dd>
+        <div id="userinfo">
+            <dt><img id="userpic" ng-src="{{userpic}}" alt="userpic"/></dt>
+            <dd id="username" ng-bind="username"></dd>
         </div>
     </div>
     <div id="content" class="col-md-10">
-        <div id="content_header" class="row">
-            <div class="col-md-4">
-                <h1>topic</h1>
-            </div>
-        </div>
         <div id="content_show" class="panel">
-            <div id="contents"></div>
+            <ul id="contents">
+                <li ng-repeat="list in msg" ng-switch on="list.type">
+                    <div ng-switch-when="text">
+                        <dl class="talk-section clearfix">
+                            <dt><img class="userPic" ng-src="{{list.senderPic}}" alt="userpic"></dt>
+                            <dd>
+                                <em id="username" ng-bind="{{list.from}}"></em>
+                                <span id="timestamp"
+                                      ng-bind-template="{{list.time|date : 'yyyy-MM-dd hh:mm:ss '}}"></span>
+                                    <p class="content" style="color:{{list.fontColor}}" ng-bind="list.msg"></p><i ng-hide="list.valid">invalid</i>
+                                    <!--<p class="content"  ng-switch-when="img">-->
+                                        <!--<img ng-src="{{list.data.picSrc}}" alt="{{list.data.picSrc}}" ng-click="previewImg()"/>-->
+                                    <!--</p>-->
+                                    <!--<p class="content"  ng-switch-when="emoji" >-->
+                                        <!--<img ng-src="{{list.data.emojiSrc}}" alt="{{list.data.emojiSrc}}" />-->
+                                    <!--</p>-->
+                            </dd>
+                        </dl>
+                    </div>
+                    <div ng-switch-when="img">
+                        <dl class="talk-section clearfix">
+                            <dt><img class="userPic" ng-src="{{list.senderPic}}" alt="userpic"></dt>
+                            <dd>
+                                <em id="username" ng-bind="{{list.from}}"></em><span id="timestamp"
+                                                                                     ng-bind-template="{{list.time|date : 'yyyy-MM-dd hh:mm:ss '}}"></span>
+
+                                <p class="content">
+                                    <img class="reduce-img" ng-src="{{list.picSrc}}" alt="{{list.picSrc}}" data-previewSrc="{{list.previewSrc}}" ng-click="previewImg($event)"/>
+                                </p>
+                            </dd>
+                        </dl>
+                    </div>
+                    <div ng-switch-when="emoji">
+                        <dl class="talk-section clearfix">
+                            <dt><img class="userPic" ng-src="{{list.senderPic}}" alt="userpic"></dt>
+                            <dd>
+                                <em id="username" ng-bind="{{list.from}}"></em><span id="timestamp"
+                                                                                     ng-bind-template="{{list.time|date : 'yyyy-MM-dd hh:mm:ss '}}"></span>
+                                <p class="content">
+                                    <img ng-src="{{list.emojiSrc}}" alt="{{list.emojiSrc}}" />
+                                </p>
+                                <i ng-hide="list.valid">invalid</i>
+                            </dd>
+                        </dl>
+                        <div class=""></div>
+                    </div>
+                    <!--<div ng-switch-when="sys" style="color:#f00" ng-bind="{{list.content}}"></div>-->
+                    <div ng-switch-when="notify" style="color:#f00"
+                         ng-bind-template="System({{list.date|date : 'yyyy-MM-dd hh:mm:ss'}}):{{list.content}}"></div>
+                    <div ng-switch-default></div>
+                </li>
+            </ul>
+            <!--<div class="preview_pic" ng-show="previewOpened">-->
+                <!--<img ng-src="previewSrc" alt="previewSrc"/>-->
+            <!--</div>-->
+
         </div>
-        <div id="content_saying" class="panel">
+
+        <div id="content_saying" class="panel" ng-controller="msgInput">
             <div id="toolbar" class="bg-info form-inline">
-                <input id="colorStyle" class="items btn btn-default " type="color" placeHolder='#000' title="font color" />
-                <input id="emoji" class="items btn btn-default"  type="button" value="表情" title="emoji" />
-                <div id="emojiWrapper">
+                <input id="colorStyle" class="items btn btn-default " type="color" placeHolder='#000' title="font color"
+                       ng-model="fontColor" />
 
+                <div ng-controller="emoji">
+                    <input id="emoji" class="items btn btn-default" ng-click="emojiOpened = !emojiOpened" type="button"
+                           value="表情" title="emoji"/>
 
+                    <div id="emojiWrapper" ng-class="{'open':emojiOpened}" ng-click="addEmoji($event)">
+                        <ul class="overflowWrapper">
+                            <img class="emoji" ng-src="emoji/{{emoji}}.gif" alt="{{emoji}}" title="{{emoji}}"
+                                 ng-repeat="emoji in emojiList"/>
+                        </ul>
+                    </div>
                 </div>
-                <input id="imgTrigger" class="items btn btn-default" value="发送图片" type="button"/>
-                <input id="sendImage" class="items btn btn-default" type="file" value="image" />
+                <a href="javascript:void(0);"  id="imgTrigger"  class="items btn btn-default">
+                    发送图片
+                    <input filereader id="sendImage" class="items btn btn-default" type="file" value=""/>
+                </a>
             </div>
-            <div id="sayingto">你好 <span id="from"></span> ，你正在对 <span id="to"></span> 说</div>
-            <div class="input_area row">
-                <div id="input_content" class="col-md-10" data-type="" contenteditable="true" placeholder="请输入。。">
-                </div>
-                <button id="say" class="col-md-2 btn btn-default">
+            <div id="sayingto">你好，你正在对 <span id="to" ng-bind="reciver"></span>说</div>
+            <div class="input_area row panel">
+                <textarea id="input_content" class="col-md-10" style="color:{{fontColor}}" data-type=""
+                          placeholder="请输入。。" ng-keydown="enterEvt($event)" ng-model="msgContent">
+                </textarea>
+                <button id="say" class="col-md-2 btn btn-default" ng-click="sendMsg()">
                     发送
                 </button>
             </div>
         </div>
     </div>
+
 </div>
-$('<audio id="chatAudio">
-</audio>').appendTo('body');//载入声音文件
 <audio id="ring" style="width:0px; height:0px;display: none;" controls="controls">
     <source src="ring/online.wav" type="audio/wav">
     <source src="ring/msg.wav" type="audio/wav">
 </audio>
+<div id="img-warpper" ng-show="previewShow">
+    <div class="floatBg"></div>
+    <img style="background: url({{currentPreviewImg}}) ;background-repeat: no-repeat;
+  background-position: center center;" />
+    <button class="items btn btn-default" ng-click="previewShow=!previewShow">关闭</button>
+</div>
 </body>
-<script data-main="app.js" src="javascripts/require.js"></script>
+<script data-main="app.js" src="javascripts/lib/require.js"></script>
 </html>
